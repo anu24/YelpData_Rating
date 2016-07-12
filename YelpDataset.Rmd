@@ -1,0 +1,242 @@
+---
+title: "Yelp Dataset - Proposal of modifying rating system"
+output: pdf_document
+---
+
+# 1. Indroduction:
+ Yelp is having a million of review dataset of restaurants. Sometimes when we search for the restaurant we will get same starts for more than on restaurants, which leads to confusion for the customer. Goal of the analysis is to bring new rating syatem which give more accurate systems.
+ 
+First method is create new rating which gives more weight to those who have reviewed more restaurants of the same cuisine. Let take we have 12 restaurants which is showing the same rating and some has visited and reviewed all the 12 restaurants, then their opinion should be given significantly more weight. Even someone who has been visited 3 out of 12 should be given more weight than someone who has just attended one.
+
+# 2. Required Environment
+```{r, warning=FALSE, message=FALSE}
+library(rjson)
+library(jsonlite)
+library(data.table)
+library(dplyr)
+library(knitr)
+```
+
+# 3. Yelp Dataset
+The main file “review” consist of text and star rating of each user review. The user business are identified through a unique user_id and business_id. The date of the review is also included.  
+More details on the each user can be found in user file.  The actual dataset is in JSON.  
+```{r, results='hide',message=FALSE,warning=FALSE}
+setwd("/Users/anushreeshivarudrappa/Desktop/Yelp/yelp_dataset_challenge_academic_dataset")
+
+yelp_review <- fread("yelp_academic_dataset_review.csv")
+head(yelp_review)
+yelp_review$V1 <- NULL
+
+yelp_user <- fread("yelp_academic_dataset_user.csv")
+yelp_user$V1 <- NULL
+
+yelp_business <- stream_in(file
+("/Users/anushreeshivarudrappa/Desktop/Yelp/yelp_dataset_challenge_academic_dataset/yelp_academic_dataset_business.json"))
+yelp_new <- yelp_business[,c("business_id","city","name", "categories", "review_count",
+                             "stars")]
+categories <- yelp_new$categories
+yelp_business <- fread("yelp_academic_dataset_business.csv")
+yelp_business$V1 <- NULL
+yelp_business$categories <- categories
+yelp_business$stars <- as.integer(yelp_business$stars)
+names(yelp_business) <- c("business_id", "city", "business_name", "categories", 
+                          "review_count","Avg_stars")
+
+```
+** JOIN the dataframe **
+
+```{r, message=FALSE}
+y <- merge(yelp_review,yelp_user,by.x = "user_id", by.y = "user_id")
+yelp <- merge(y,yelp_business, by.x = "business_id", by.y = "business_id")
+# After join process "--" is added to user_id and business_id so removing it
+yelp$user_id <- sub("--", "", yelp$user_id)
+yelp$business_id <- sub("--", "", yelp$business_id)
+```
+
+# 4. Analysis Method: Giving more weight to multiple reviewers of a cuisine.
+Analyze the dataset first to find multiple reviews there for cuisine. If there are very few the adding weight to their opinions may ultimately have little impact on overall rating. 
+
+## A. Lets first look at Indian cuisine.  
+Add as “is_indian” column to the table based on whether the word “Indian” appear in “categories”
+```{r}
+# Add "is_indian" field for any review that has "Indian" in "categories"
+yelp$is_indian <- grepl("Indian", yelp$categories) 
+
+# filter data frame with Indian restaurants
+yelp_Indian <- yelp[yelp$is_indian == T]
+# After above join process "-" is added to user_id and business_id so removing it
+yelp_Indian$business_id <- sub("-", "", yelp_Indian$business_id)
+yelp_Indian$user_id <- sub("-", "", yelp_Indian$user_id)
+head(yelp_Indian)
+```
+
+** Generate a summary of number of reviews of that cuisine done by each reviewer**
+Use group_by and summaries commands from dplyr to create a table of # of reviews of Indian restaurants each user has done.
+```{r}
+review_Indian_count <- yelp_Indian %>% group_by(user_id) %>% summarise(tot_rev = sum(is_indian))
+```
+
+** Print the table, show the total # of entries, and find the avg # of reviews per user**
+```{r}
+table(review_Indian_count$tot_rev)
+count(review_Indian_count)
+mean(review_Indian_count$tot_rev)
+```
+This yield result of 13763 total reviews, with 11321 doing just one review, 1528 doing 2 review. more than 10% of users have done multiple review of indian cuisine. Will use these reviews to improve rating system.
+
+## B. Use similar method on different cuisine
+**CHINESE**
+```{r}
+yelp$is_Chinese <- grepl("Chinese", yelp$categories) 
+yelp_Chinese <- yelp[yelp$is_Chinese == T]
+review_Chinese_count <- yelp_Chinese %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Chinese_count$tot_rev)
+count(review_Chinese_count)
+mean(review_Chinese_count$tot_rev)
+```
+
+**MEXICAN**
+```{r}
+yelp$is_Mexican <- grepl("Mexican", yelp$categories) 
+yelp_Mexican <- yelp[yelp$is_Mexican == T]
+review_Mexican_count <- yelp_Mexican %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Mexican_count$tot_rev)
+count(review_Mexican_count)
+mean(review_Mexican_count$tot_rev)
+```
+
+**ITALIAN**
+```{r}
+yelp$is_Italian <- grepl("Italian", yelp$categories) 
+yelp_Italian <- yelp[yelp$is_Italian == T]
+review_Italian_count <- yelp_Italian %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Italian_count$tot_rev)
+count(review_Italian_count)
+mean(review_Italian_count$tot_rev)
+```
+
+**GREEK**
+```{r}
+yelp$is_Greek <- grepl("Greek", yelp$categories) 
+yelp_Greek <- yelp[yelp$is_Greek == T]
+review_Greek_count <- yelp_Greek %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Greek_count$tot_rev)
+count(review_Greek_count)
+mean(review_Greek_count$tot_rev)
+```
+
+**FRENCH**
+```{r}
+yelp$is_French <- grepl("French", yelp$categories) 
+yelp_French <- yelp[yelp$is_French == T]
+review_French_count <- yelp_French %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_French_count$tot_rev)
+count(review_French_count)
+mean(review_French_count$tot_rev)
+```
+
+**THAI**
+```{r}
+yelp$is_Thai <- grepl("Thai", yelp$categories) 
+yelp_Thai <- yelp[yelp$is_Thai == T]
+review_Thai_count <- yelp_Thai %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Thai_count$tot_rev)
+count(review_Thai_count)
+mean(review_Thai_count$tot_rev)
+```
+
+**MEDITERRANEAN**
+```{r}
+yelp$is_Mediterranean <- grepl("Mediterranean", yelp$categories) 
+yelp_Mediterranean <- yelp[yelp$is_Mediterranean == T]
+review_Mediterranean_count <- yelp_Mediterranean %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Mediterranean_count$tot_rev)
+count(review_Mediterranean_count)
+mean(review_Mediterranean_count$tot_rev)
+```
+
+**SPANISH**
+```{r}
+yelp$is_Spanish <- grepl("Spanish", yelp$categories)  | grepl("Tapas", yelp$categories)
+yelp_Spanish <- yelp[yelp$is_Spanish == T]
+review_Spanish_count <- yelp_Spanish %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Spanish_count$tot_rev)
+count(review_Spanish_count)
+mean(review_Spanish_count$tot_rev)
+```
+
+**JAPANESE**
+```{r}
+yelp$is_Japanese <- grepl("Japanese", yelp$categories)  | grepl("Sushi", yelp$categories)
+yelp_Japanese <- yelp[yelp$is_Japanese == T]
+review_Japanese_count <- yelp_Japanese %>% group_by(user_id) %>% summarise(tot_rev = n())
+table(review_Japanese_count$tot_rev)
+count(review_Japanese_count)
+mean(review_Japanese_count$tot_rev)
+```
+
+## Table of results of differeny Cusine.
+
+Cuisine  | Total Reviews | # >1 Review | % > 1 Review | Max Reviews |
+---------|---------------|-------------|--------------|-------------|
+Indian   |  13763        |  2442       |  18          |  34         |
+Chinese  |  46729        |  9908       |  21          |  54         |
+Mexican  |  79355        |  21168      |  26          |  147        |
+Italian  |  71694        |  16980      |  23          |  96         |
+Greek    |  14990        |  2370       |  15          |  20         |
+French   |  22983        |  3848       |  16          |  48         |
+Thai     |  28532        |  5430       |  19          |  79         |
+Medit    |  27675        |  5004       |  18          |  44         |
+Spanish  |  17377        |  2372       |  13          |  32         |
+Japanese |  64831        |  16341      |  25          |  87         |
+
+# 5. Apply new Weight and see the effect
+**Combine num_reviews information with original data frame of indian restaurant reviews**
+We can see that all the cuisines had at least 10% of reviewers giving multiple reviews.  
+Let modify the rating using these wights and seeing what impact they have. Let’s try first on Idian restaurants. We have # of reviews for each user in “review_Indian_count” Lets going this back to yelp_Indian data frame containing all individual ratings, we have a new table which has rating the user gave as well as the # of Indian restaurants they have reviewed. 
+```{r}
+cob_in <- inner_join(yelp_Indian, review_Indian_count) # join by user_id
+```
+
+**Generate "weighted_stars" for later calculation**
+```{r}
+cob_in$Weighted_Star <- cob_in$stars * cob_in$tot_rev
+```
+
+**Use "summarise" to generate a new rating for each restaurant**
+```{r}
+cal1 <- cob_in %>%  group_by(city, business_name, Avg_stars) %>%
+                      summarise(count = n(),
+                      new = sum(Weighted_Star) / sum(tot_rev))
+
+cal2 <-  cob_in %>%  group_by(city, business_name, Avg_stars) %>% 
+                        summarise(sumOfStars = sum(stars))
+
+new_rating_Indian <- inner_join(cal1,cal2)
+new_rating_Indian$old <- new_rating_Indian$sumOfStars / new_rating_Indian$count
+new_rating_Indian$diff <- new_rating_Indian$new - new_rating_Indian$old
+```
+**Print summary data of the effect this new rating has**
+```{r}
+summary(new_rating_Indian$diff)
+```
+We see that new weights can move the rating down by as many as 1.37 stars or up as high as 0.85 stars.
+
+**Limit to those with at least 5 ratings and redo summary**
+```{r}
+nri5 <- subset(new_rating_Indian, count > 5)
+summary(nri5$newStar)
+```
+We can see that the impact increases of unto 1.37 starts and decrease of as much as 0.8
+
+# 6. Look at new and old ratings.
+Checking the rating for few restaurants.
+```{r}
+new_rating_Indian <- as.data.frame(new_rating_Indian)
+head(new_rating_Indian[, c("business_name", "old", "new")],10)
+```
+We can see when there was a tie, new rating will help user.
+
+# 6. Future analysis:
+Creating an “immigrant” rating. Lets take an example of Indian restaurants, lot of immigrant indian workers working there temporarily for various tech companies. On the theory that those workers would actively seek out restaurants that remains them closing of “home cooking” and also that they tend to seek out places offering the most value, one thing people might do is check the rating given by those with clearly Indian names to see what they think. The proposal would be to check the user name in Yelp to guess at who might be an “immigrant” and create different rating for particular ethnic cuisine given specifically by those users. This method admittedly has some clear deficiencies - it will ignore any “immigrants” who do not use their real names and it will also mark as “immigrants” those who simply like an Indian name and choose to use it for Yep ID. The theory is that there might be enough information that cuts through the noise of those deficiencies to be able to provide useful information.
+
